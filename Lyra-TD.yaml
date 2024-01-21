@@ -1,0 +1,244 @@
+# https://community.home-assistant.io/t/esp32-lyratd-msc-x-esphome/573296/8
+
+esp32:
+  board: esp-wrover-kit
+  framework:
+    type: esp-idf
+
+esphome:
+  name: smart-speaker-lyratd
+  min_version: 2023.11.0b5
+  on_boot:
+    priority: -100
+    then:
+      - lambda: leds->setBrightness(12,255);
+      - delay: 200ms
+      - lambda: leds->setBrightness(13,255);
+      - delay: 200ms
+      - lambda: leds->setBrightness(12,100);
+      - lambda: leds->setBrightness(13,100);
+      - delay: 200ms
+      - lambda: leds->setBrightness(12,20);
+      - lambda: leds->setBrightness(13,20);
+      - delay: 200ms
+      - lambda: leds->setBrightness(12,0);
+      - lambda: leds->setBrightness(13,0);
+
+debug:
+  update_interval: 5s
+
+api:
+
+
+ota:
+  password: !secret ota_password
+
+wifi:
+  ssid: !secret zel_ssid_name
+  password: !secret zel_ssid_password
+
+preferences:
+  flash_write_interval: 10min
+
+logger:
+  level: DEBUG
+  logs:
+    adc: INFO
+    sensor: INFO
+
+external_components:
+  - source: github://pr#5230
+    components:
+      - esp_adf
+    refresh: 0s
+  - source:
+      type: local
+      path: custom_components
+    components: ["is31fl3216"]
+
+i2c:
+  sda: GPIO18
+  scl: GPIO23
+
+i2s_audio:
+  i2s_lrclk_pin: GPIO25
+  i2s_bclk_pin: GPIO5
+
+speaker:
+  - platform: i2s_audio
+    id: echo_speaker
+    dac_type: external
+    i2s_dout_pin: GPIO26
+    mode: stereo
+
+microphone:
+  - platform: i2s_audio
+    id: echo_microphone
+    adc_type: external
+    i2s_din_pin: GPIO35
+    pdm: false
+
+voice_assistant:
+  id: va
+  speaker: echo_speaker
+  microphone: echo_microphone
+  noise_suppression_level: 2
+  auto_gain: 31dBFS
+  volume_multiplier: 2.0
+  vad_threshold: 3
+  on_wake_word_detected:
+    - lambda: |-
+          for(int i=0; i<12; i++){
+            leds->setBrightness(i,255);
+          }
+    - delay: 2000ms
+    - lambda: |-         
+          for(int i=0; i<12; i++){
+            leds->setBrightness(i,0);
+          }
+  on_start:
+    - lambda: |-
+        leds->setBrightness(12, 255);
+  on_end:
+    - delay: 100ms
+    - wait_until:
+        not:
+          speaker.is_playing:
+    - lambda: |-
+        leds->setBrightness(12, 0);
+  on_client_connected:
+    - if:
+        condition:
+          switch.is_on: use_wake_word
+        then:
+          - voice_assistant.start_continuous:
+  on_client_disconnected:
+    - if:
+        condition:
+          switch.is_on: use_wake_word
+        then:
+          - voice_assistant.stop:
+
+switch:
+  - platform: gpio
+    pin: 
+      number: GPIO21
+      inverted: true
+    name: None
+    id: power_switch
+    restore_mode: ALWAYS_ON
+  - platform: gpio
+    pin: GPIO22
+    id: amp_switch
+    name: Speakers
+    restore_mode: ALWAYS_ON
+  - platform: template
+    name: Use wake word
+    id: use_wake_word
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    entity_category: config
+    on_turn_on:
+      - lambda: id(va).set_use_wake_word(true);
+      - if:
+          condition:
+            not:
+              - voice_assistant.is_running
+          then:
+            - voice_assistant.start_continuous
+    on_turn_off:
+      - voice_assistant.stop
+      - lambda: id(va).set_use_wake_word(false);
+
+button:
+  - platform: template
+    id: set_button
+    on_press:
+      - logger.log: Set button pressed
+  - platform: template
+    id: play_button
+    on_press:
+      - logger.log: Play button pressed
+      - lambda: id(va).set_use_wake_word(false);
+  - platform: template
+    id: rec_button
+    name: Record
+    on_press:
+      - if:
+          condition:
+            switch.is_off: use_wake_word
+          then:
+            - if:
+                condition: voice_assistant.is_running
+                then:
+                  - voice_assistant.stop:
+                else:
+                  - voice_assistant.start:
+          else:
+            - voice_assistant.stop
+            - delay: 1s
+            - voice_assistant.start_continuous:
+      - logger.log: Record button pressed
+  - platform: template
+    id: mode_button
+    on_press:
+      - logger.log: Mode button pressed
+  - platform: template
+    id: vol_down_button
+    on_press:
+      #- media_player.volume_down:
+      - lambda: |-
+          for(int i=0; i<10; i++){
+            leds->setBrightness(i,255);
+          }
+
+      - logger.log: Volume Down button pressed
+  - platform: template
+    id: vol_up_button
+    on_press:
+      #- media_player.volume_up:
+      - logger.log: Volume Up button pressed
+      - lambda: |-   
+          for(int i=0; i<10; i++){
+            leds->setBrightness(i,0);
+          }
+
+sensor:
+  - platform: adc
+    pin: GPIO39
+    id: button_array
+    accuracy_decimals: 1
+    update_interval: 200ms
+    attenuation: auto
+    on_value_range:
+      - above: 0.2
+        below: 0.4
+        then:
+          - button.press: set_button
+      - above: 0.7
+        below: 0.9
+        then:
+          - button.press: play_button
+      - above: 1.2
+        below: 1.4
+        then:
+          - button.press: rec_button
+      - above: 1.7
+        below: 1.9
+        then:
+          - button.press: mode_button
+      - above: 2.2
+        below: 2.4
+        then:
+          - button.press: vol_down_button
+      - above: 2.7
+        below: 3.0
+        then:
+          - button.press: vol_up_button
+is31fl3216:
+  id: leds
+  address: 0x74
+
+
+
+esp_adf:
