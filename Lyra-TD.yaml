@@ -1,4 +1,4 @@
-# https://community.home-assistant.io/t/esp32-lyratd-msc-x-esphome/573296/8
+# Based on https://community.home-assistant.io/t/esp32-lyratd-msc-x-esphome/573296/8
 
 esp32:
   board: esp-wrover-kit
@@ -51,9 +51,7 @@ external_components:
     components:
       - esp_adf
     refresh: 0s
-  - source:
-      type: local
-      path: custom_components
+  - source: github://Gromina/esphome_devices
     components: ["is31fl3216"]
 
 i2c:
