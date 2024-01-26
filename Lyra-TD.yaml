@@ -11,18 +11,10 @@ esphome:
   on_boot:
     priority: -100
     then:
-      - lambda: leds->setBrightness(12,255);
-      - delay: 200ms
-      - lambda: leds->setBrightness(13,255);
-      - delay: 200ms
-      - lambda: leds->setBrightness(12,100);
-      - lambda: leds->setBrightness(13,100);
-      - delay: 200ms
-      - lambda: leds->setBrightness(12,20);
-      - lambda: leds->setBrightness(13,20);
-      - delay: 200ms
-      - lambda: leds->setBrightness(12,0);
-      - lambda: leds->setBrightness(13,0);
+    - light.turn_on:
+        id: leds
+        brightness: 60%
+        effect: "Slow Pulse"
 
 debug:
   update_interval: 5s
@@ -53,6 +45,10 @@ external_components:
     refresh: 0s
   - source: github://Gromina/esphome_devices
     components: ["is31fl3216"]
+  - source: 
+      type: local
+      path: ./components
+    components: ["lyratd_light"]
 
 i2c:
   sda: GPIO18
@@ -85,25 +81,15 @@ voice_assistant:
   volume_multiplier: 2.0
   vad_threshold: 3
   on_wake_word_detected:
-    - lambda: |-
-          for(int i=0; i<12; i++){
-            leds->setBrightness(i,255);
-          }
-    - delay: 2000ms
-    - lambda: |-         
-          for(int i=0; i<12; i++){
-            leds->setBrightness(i,0);
-          }
+  - delay: 100ms
   on_start:
-    - lambda: |-
-        leds->setBrightness(12, 255);
+  - delay: 100ms
   on_end:
-    - delay: 100ms
-    - wait_until:
-        not:
-          speaker.is_playing:
-    - lambda: |-
-        leds->setBrightness(12, 0);
+  - delay: 100ms
+  - wait_until:
+      not:
+        speaker.is_playing:
+  - delay: 100ms
   on_client_connected:
     - if:
         condition:
@@ -122,7 +108,7 @@ switch:
     pin: 
       number: GPIO21
       inverted: true
-    name: None
+    name: Power
     id: power_switch
     restore_mode: ALWAYS_ON
   - platform: gpio
@@ -147,7 +133,40 @@ switch:
     on_turn_off:
       - voice_assistant.stop
       - lambda: id(va).set_use_wake_word(false);
-
+light:
+  id: leds
+  platform: monochromatic
+  name: Blue LEDs
+  effects:
+  - pulse:
+      name: "Slow Pulse"
+      transition_length: 250ms
+      update_interval: 250ms
+      min_brightness: 10%
+      max_brightness: 40%
+  - pulse:
+      name: "Fast Pulse"
+      transition_length: 100ms
+      update_interval: 100ms
+      min_brightness: 50%
+      max_brightness: 100%
+  output: lyraleds_red
+output:
+  - platform: lyratd_light
+    address: 0x74
+    min_range: 0
+    max_range: 11
+    id: lyraleds_blue
+  - platform: lyratd_light
+    address: 0x74
+    min_range: 12
+    max_range: 12
+    id: lyraleds_red
+  - platform: lyratd_light
+    address: 0x74
+    min_range: 13
+    max_range: 13
+    id: lyraleds_green
 button:
   - platform: template
     id: set_button
@@ -185,21 +204,12 @@ button:
     id: vol_down_button
     on_press:
       #- media_player.volume_down:
-      - lambda: |-
-          for(int i=0; i<10; i++){
-            leds->setBrightness(i,255);
-          }
-
       - logger.log: Volume Down button pressed
   - platform: template
     id: vol_up_button
     on_press:
       #- media_player.volume_up:
       - logger.log: Volume Up button pressed
-      - lambda: |-   
-          for(int i=0; i<10; i++){
-            leds->setBrightness(i,0);
-          }
 
 sensor:
   - platform: adc
@@ -233,9 +243,9 @@ sensor:
         below: 3.0
         then:
           - button.press: vol_up_button
-is31fl3216:
-  id: leds
-  address: 0x74
+#is31fl3216:
+#  id: leds
+#  address: 0x74
 
 
 

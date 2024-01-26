@@ -1,14 +1,10 @@
 #include "esphome/core/log.h"
-#include "is31fl3216.h"
+#include "lyratd_light.h"
 
 namespace esphome {
-namespace is31fl3216 {
+namespace lyratd_light {
 
-static const char *TAG = "is31fl3216.component";
-
-// will actually take it from config
-//const uint16_t I2C_ADDRESS = 0x74;
-
+static const char *TAG = "output.lyratd_light";
 const uint8_t CONFIG_REGISTER=0x00;
 
 const uint8_t FRAME_REGISTER=0x00;
@@ -20,13 +16,8 @@ const uint8_t PWM_UPDATE_REGISTER=0xb0;
 
 const uint8_t LED_CONROL_H_REGISTER = 0x01;
 const uint8_t LED_CONROL_L_REGISTER = 0x02;
-
-IS31FL3216Component::IS31FL3216Component() 
-{
-
-}
-void IS31FL3216Component::setup()  {
-    ESP_LOGE(TAG, "Setting up I2C IS31FL3216...");
+void LyraTDLightOutput::setup() {
+    //set_i2c_address(I2C_ADDRESS);
     write_byte(CONFIG_REGISTER, 0b00000000); // onfiguration Register
     write_byte(LED_CONROL_H_REGISTER,0xff); // LED Control Registerr
     write_byte(LED_CONROL_L_REGISTER,0xff); // LED Control Registerr
@@ -40,16 +31,20 @@ void IS31FL3216Component::setup()  {
     {
       setBrightness((int)i,0);
     }
-    
-    
-                    
 }
 
-void IS31FL3216Component::dump_config(){
-    ESP_LOGCONFIG(TAG, "IS31FL3216 component");
-}
 
-void IS31FL3216Component::setBrightness(int led_num, uint8_t val) {
+void LyraTDLightOutput::write_state(float state) {
+
+    auto is_on = state>0.f;
+    uint8_t brightness = is_on ? floorf(state*255) : 0;
+    for (size_t i = leda; i <= ledb; i++)
+    {
+      setBrightness((int)i, brightness);
+    }    
+
+}
+void LyraTDLightOutput::setBrightness(int led_num, uint8_t val) {
 
     write_byte(PWM_REGISTER +  (15-led_num), val ); 
     my_leds ^= 0x01<<led_num; // clear led
@@ -61,16 +56,15 @@ void IS31FL3216Component::setBrightness(int led_num, uint8_t val) {
 }
 
 
-void IS31FL3216Component::writeLedsStatus(){
+void LyraTDLightOutput::writeLedsStatus(){
 
         write_byte(LED_CONROL_H_REGISTER, my_leds>>8); 
         write_byte(LED_CONROL_L_REGISTER, my_leds&0xff);
 }
 
+void LyraTDLightOutput::dump_config(){
+    ESP_LOGCONFIG(TAG, "LyraTDLightOutput custom light");
+}
 
-
-
-
-
-}  // namespace empty_component
-}  // namespace esphome
+} //namespace empty_light
+} //namespace esphome
